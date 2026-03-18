@@ -92,11 +92,12 @@ class InsurerMatchingAgent:
                          budget: str, priority_ids: list) -> list:
         """
         Score each insurer 0-100 based on:
-        - Condition-specific coverage (40pts)
+        - Condition-specific coverage (35pts)
         - Claim settlement ratio (20pts)
-        - Age suitability (15pts)
-        - Budget fit (15pts)
+        - Age suitability (25pts)  ← increased weight
+        - Budget fit (20pts)       ← increased weight
         - Network size (10pts)
+        Age and budget now have strong enough weight to meaningfully reorder rankings.
         """
         scored = []
         condition_lower = condition.lower()
@@ -106,10 +107,10 @@ class InsurerMatchingAgent:
             reasons = []
             warnings = []
 
-            # ── Condition match (40pts) ───────────────────────────────────────
+            # ── Condition match (35pts) ───────────────────────────────────────
             cond_score = 0
             if ins["id"] in priority_ids:
-                cond_score += 25
+                cond_score += 20
                 reasons.append("Specialised coverage for this condition")
 
             # Check special coverages
@@ -124,10 +125,10 @@ class InsurerMatchingAgent:
             # Check best_for list
             for tag in ins.get("best_for", []):
                 if tag in condition_lower or condition_lower in tag:
-                    cond_score = min(cond_score + 10, 40)
+                    cond_score = min(cond_score + 10, 35)
                     break
 
-            score += min(cond_score, 40)
+            score += min(cond_score, 35)
 
             # ── Claim settlement ratio (20pts) ────────────────────────────────
             csr = ins["claim_settlement_ratio"]
@@ -143,44 +144,93 @@ class InsurerMatchingAgent:
                 score += 4
                 warnings.append(f"Claim settlement ratio is {csr}% — below industry average")
 
-            # ── Age suitability (15pts) ───────────────────────────────────────
-            if age <= ins["entry_age_max"]:
-                if age >= 60:
-                    if "senior" in " ".join(ins.get("best_for", [])):
-                        score += 15
-                        reasons.append("Dedicated senior citizen plan available")
-                    else:
-                        score += 8
-                        warnings.append("Not specialised for senior citizens")
-                else:
+            # ── Age suitability (25pts) — strong enough to reorder rankings ──
+            if age >= 60:
+                # Senior profile — heavily favour senior-specialist insurers
+                if ins["id"] in ["star_health", "care_health", "oriental"]:
+                    score += 25
+                    reasons.append("Best-in-class senior citizen plan available")
+                elif ins["id"] in ["hdfc_ergo", "bajaj_allianz"]:
                     score += 15
-            else:
-                score += 0
-                warnings.append(f"Age {age} may exceed entry limit for some plans")
-
-            # ── Budget fit (15pts) ────────────────────────────────────────────
-            if budget == "low":
-                if ins["id"] in ["new_india", "united_india", "oriental"]:
-                    score += 15
-                    reasons.append("Government insurer — lowest premium")
-                elif ins["id"] in ["star_health", "care_health"]:
-                    score += 8
+                    reasons.append("Senior coverage available with co-payment")
+                elif ins["id"] in ["new_india", "united_india"]:
+                    score += 12
+                    reasons.append("Government insurer — accepted for senior citizens")
                 else:
                     score += 5
-                    warnings.append("Premium may be higher than budget")
-            elif budget == "medium":
-                if ins["id"] in ["star_health", "icici_lombard", "bajaj_allianz"]:
-                    score += 15
-                    reasons.append("Good value for mid-range budget")
+                    warnings.append("Limited senior-specific plans — check entry age carefully")
+
+            elif age >= 45:
+                # Middle-aged — balanced scoring
+                if ins["id"] in ["star_health", "hdfc_ergo", "care_health"]:
+                    score += 22
+                    reasons.append("Excellent coverage for 45+ age group")
+                elif ins["id"] in ["niva_bupa", "icici_lombard", "bajaj_allianz"]:
+                    score += 18
                 else:
-                    score += 10
-            else:  # high
-                if ins["id"] in ["hdfc_ergo", "niva_bupa", "care_health",
-                                   "reliance_health"]:
-                    score += 15
-                    reasons.append("Premium plans with no room rent capping")
+                    score += 14
+
+            elif age >= 30:
+                # Prime working age — most insurers work well
+                if ins["id"] in ["hdfc_ergo", "niva_bupa", "reliance_health"]:
+                    score += 22
+                    reasons.append("Premium plans ideal for this age group")
+                elif ins["id"] in ["star_health", "icici_lombard", "care_health"]:
+                    score += 20
                 else:
+                    score += 16
+
+            else:
+                # Young — favour digital-first, wellness-focused insurers
+                if ins["id"] in ["niva_bupa", "icici_lombard", "hdfc_ergo"]:
+                    score += 25
+                    reasons.append("Best digital experience and wellness benefits for young professionals")
+                elif ins["id"] in ["reliance_health", "bajaj_allianz"]:
+                    score += 20
+                else:
+                    score += 14
+                    if ins["id"] in ["oriental", "united_india"]:
+                        warnings.append("PSU insurers have limited digital features for young users")
+
+            # ── Budget fit (20pts) — strong enough to reorder rankings ────────
+            if budget == "low":
+                if ins["id"] in ["new_india", "united_india", "oriental"]:
+                    score += 20
+                    reasons.append("Government insurer — lowest premium in India")
+                elif ins["id"] in ["star_health"]:
+                    score += 12
+                    reasons.append("Competitive pricing with good coverage")
+                elif ins["id"] in ["bajaj_allianz", "icici_lombard"]:
                     score += 8
+                else:
+                    score += 4
+                    warnings.append("Premium plans may exceed low budget — check Arogya Sanjeevani option")
+
+            elif budget == "medium":
+                if ins["id"] in ["star_health", "icici_lombard", "bajaj_allianz", "care_health"]:
+                    score += 20
+                    reasons.append("Best value for mid-range budget")
+                elif ins["id"] in ["hdfc_ergo", "niva_bupa"]:
+                    score += 14
+                    warnings.append("Premium plans available but entry-level plans fit medium budget")
+                elif ins["id"] in ["new_india", "united_india"]:
+                    score += 16
+                    reasons.append("Affordable government insurer with solid coverage")
+                else:
+                    score += 12
+
+            else:  # high budget
+                if ins["id"] in ["hdfc_ergo", "niva_bupa", "care_health", "reliance_health"]:
+                    score += 20
+                    reasons.append("Premium plans with no room rent capping and full benefits")
+                elif ins["id"] in ["star_health", "icici_lombard"]:
+                    score += 16
+                    reasons.append("High sum insured plans available")
+                elif ins["id"] in ["new_india", "united_india", "oriental"]:
+                    score += 6
+                    warnings.append("Government insurers have limited high-value plans")
+                else:
+                    score += 12
 
             # ── Network size (10pts) ──────────────────────────────────────────
             net = ins["network_hospitals"]
@@ -200,12 +250,54 @@ class InsurerMatchingAgent:
                 score += 3
                 reasons.append(f"Shorter PED waiting period: {ped} months")
 
-            # ── Room rent capping penalty ─────────────────────────────────────
+            # ── Room rent capping bonus ───────────────────────────────────────
             if "no room" in ins["room_rent_limit"].lower():
                 score += 2
                 reasons.append("No room rent capping on premium plans")
             else:
                 warnings.append("Room rent sub-limit applies — check before admission")
+
+            # ── Profile fit penalty/bonus (prevents wrong insurers in top 3) ──
+            psu_ids = ["new_india", "united_india", "oriental"]
+
+            # Young + High budget → PSU insurers are a bad fit, penalise them
+            if age < 40 and budget == "high" and ins["id"] in psu_ids:
+                score -= 20
+                warnings.append(
+                    "Not ideal for high-budget young professionals — "
+                    "limited digital features and low sum insured ceiling"
+                )
+
+            # Young + Medium budget → slight PSU penalty
+            elif age < 40 and budget == "medium" and ins["id"] in psu_ids:
+                score -= 10
+                warnings.append("Limited features and sum insured for this age and budget")
+
+            # Middle-aged (40-59) + High or Medium budget → PSU penalty
+            # These profiles need good networks, digital claims, higher SI
+            elif 40 <= age < 60 and budget in ["high", "medium"] and ins["id"] in psu_ids:
+                score -= 15
+                warnings.append(
+                    "Better private insurer options available for this age and budget — "
+                    "PSU insurers have limited sum insured and slower claim processing"
+                )
+
+            # High budget any age → reward premium private insurers
+            if budget == "high" and ins["id"] in ["hdfc_ergo", "niva_bupa",
+                                                    "care_health", "reliance_health"]:
+                score += 5
+                reasons.append("Premium features match high budget profile")
+
+            # Medium budget → reward value-for-money private insurers
+            if budget == "medium" and ins["id"] in ["star_health", "care_health",
+                                                      "icici_lombard", "bajaj_allianz"]:
+                score += 5
+                reasons.append("Best value for money at medium budget")
+
+            # Low budget + young → PSU still valid but private entry plans compete
+            if budget == "low" and age < 40 and ins["id"] in ["star_health",
+                                                                 "icici_lombard"]:
+                score += 3  # Still competitive on low-budget entry plans
 
             scored.append({
                 "insurer":      ins,
@@ -255,6 +347,7 @@ Return ONLY valid JSON:
             response = self.client.messages.create(
                 model=CLAUDE_MODEL,
                 max_tokens=800,
+                temperature=0,
                 messages=[{"role": "user", "content": prompt}]
             )
             raw = response.content[0].text.strip()
@@ -278,18 +371,21 @@ Return ONLY valid JSON:
 
     # ── Build ranked list ─────────────────────────────────────────────────────
     def _build_ranked_list(self, scored: list, llm_result: dict) -> list:
+        """
+        Rule-based scores determine the ranking — LLM is used only for
+        summary text and special notes. This ensures consistent results
+        every time the same inputs are provided.
+        """
         ranked = []
         llm_top = llm_result.get("top_recommendation", "").lower()
 
         for i, item in enumerate(scored[:10]):
             ins    = item["insurer"]
             rank   = i + 1
-            is_top = (llm_top in ins["name"].lower() or
-                      llm_top in ins["short_name"].lower())
-
-            # Boost LLM top pick to rank 1 if it's in top 3
-            if is_top and rank <= 3:
-                rank = 1
+            # Mark as top pick only if LLM agrees with rule-based #1
+            is_top = (rank == 1 or
+                      (rank <= 2 and (llm_top in ins["name"].lower() or
+                                      llm_top in ins["short_name"].lower())))
 
             ranked.append({
                 "rank":             rank,
@@ -313,13 +409,6 @@ Return ONLY valid JSON:
                 "is_top_pick":      is_top,
                 "special_note":     llm_result.get("top_reason", "") if is_top else "",
             })
-
-        # Re-sort: top pick first, then by score
-        ranked.sort(key=lambda x: (0 if x["is_top_pick"] else 1, -x["score"]))
-
-        # Re-assign ranks
-        for i, item in enumerate(ranked):
-            item["rank"] = i + 1
 
         return ranked
 
