@@ -548,6 +548,7 @@ def _get_demo_result(scenario: str) -> dict:
             }
         },
         "pdf_path":   None,
+        "preauth_result": None,
         "audit_trail": [
             {"timestamp": "2026-03-17T10:00:01", "agent": "Document Intelligence Agent",
              "action": "Policy extraction",
@@ -748,6 +749,7 @@ with tab1:
             "Extracting discharge summary...",
             "Checking IRDAI compliance...",
             "Calculating approval probability...",
+            "Simulating TPA pre-authorization...",
             "Generating audit report...",
         ]
         agent_names = [
@@ -756,6 +758,7 @@ with tab1:
             "Document Intelligence Agent",
             "Compliance Guardrail Agent",
             "Claim Prediction Agent",
+            "Pre-Auth Simulator Agent",
             "Audit Trail Agent",
         ]
 
@@ -852,18 +855,132 @@ with tab2:
         # ── Key insight ───────────────────────────────────────────────────────
         st.divider()
         if pred.get("key_insight"):
-            st.markdown(f"""
-            <div class="info-card">
-              <strong>🧠 Key Insight</strong><br/>
-              {pred['key_insight']}
-            </div>""", unsafe_allow_html=True)
+            st.markdown(
+                "<div class='info-card'>"
+                f"<strong>🧠 Key Insight</strong><br/>{pred['key_insight']}"
+                "</div>", unsafe_allow_html=True)
 
         if pred.get("recommendation"):
-            st.markdown(f"""
-            <div class="info-card" style="border-color: #185FA5; background: #E6F1FB">
-              <strong>📌 Recommendation</strong><br/>
-              {pred['recommendation']}
-            </div>""", unsafe_allow_html=True)
+            st.markdown(
+                "<div class='info-card' style='border-color:#185FA5;background:#E6F1FB'>"
+                f"<strong>📌 Recommendation</strong><br/>{pred['recommendation']}"
+                "</div>", unsafe_allow_html=True)
+
+        # ── Pre-Auth Simulator ────────────────────────────────────────────────
+        st.divider()
+        st.markdown("### 🏥 Cashless Pre-Authorization Simulator")
+        st.caption("Simulates how your TPA would respond to a pre-auth request based on your documents")
+
+        preauth = result.get("preauth_result")
+        if not preauth:
+            # Demo mode — generate simulated result from prediction score
+            from agents.preauth_agent import PreAuthSimulatorAgent
+            pa = PreAuthSimulatorAgent.__new__(PreAuthSimulatorAgent)
+            preauth = {
+                "decision":         "APPROVED" if score >= 80 else "PARTIALLY APPROVED" if score >= 50 else "REJECTED",
+                "decision_color":   "#0F6E56" if score >= 80 else "#EF9F27" if score >= 50 else "#E24B4A",
+                "decision_icon":    "✅" if score >= 80 else "⚠️" if score >= 50 else "❌",
+                "confidence":       "HIGH",
+                "decision_reason":  pred.get("recommendation", ""),
+                "claimed_amount":   result["bill_data"].get("total_bill_amount", 0),
+                "approved_amount":  int(float(str(result["bill_data"].get("total_bill_amount", 0)).replace(",","").replace("Rs.","").strip() or 0) * score / 100),
+                "deduction_amount": int(float(str(result["bill_data"].get("total_bill_amount", 0)).replace(",","").replace("Rs.","").strip() or 0) * (100 - score) / 100),
+                "deduction_reasons": ["Compliance adjustments applied"],
+                "tpa_name":         result["policy_data"].get("tpa_name", "Medi Assist"),
+                "response_time":    "1 hour",
+                "admission_type":   result["discharge_data"].get("admission_type", "Planned"),
+                "tpa_queries":      [{"query": v.get("title",""), "severity":"HIGH", "fix": v.get("fix","")} for v in comp.get("violations",[])[:3]],
+                "llm_summary":      pred.get("key_insight",""),
+                "llm_advice":       pred.get("recommendation",""),
+                "escalation_risk":  "HIGH" if score < 40 else "MEDIUM" if score < 70 else "LOW",
+                "recommendations":  [{"priority":"HIGH","icon":"💡","action":"Key action","detail": pred.get("recommendation","")}],
+                "irdai_ref":        "IRDAI/HLT/CIR/2023/205",
+            }
+
+        # Decision banner
+        d_color = preauth["decision_color"]
+        d_icon  = preauth["decision_icon"]
+        d_text  = preauth["decision"]
+        d_conf  = preauth["confidence"]
+        esc     = preauth.get("escalation_risk", "LOW")
+        esc_color = "#E24B4A" if esc == "HIGH" else "#EF9F27" if esc == "MEDIUM" else "#0F6E56"
+
+        st.markdown(
+            f"<div style='background:{d_color}15;border:2px solid {d_color};"
+            f"border-radius:12px;padding:16px 20px;margin-bottom:12px'>"
+            f"<div style='display:flex;justify-content:space-between;align-items:center'>"
+            f"<div>"
+            f"<span style='font-size:1.8rem'>{d_icon}</span>"
+            f"<span style='font-size:1.3rem;font-weight:700;color:{d_color};"
+            f"margin-left:10px'>{d_text}</span>"
+            f"<div style='font-size:12px;color:#555;margin-top:4px'>"
+            f"{preauth['decision_reason']}</div>"
+            f"</div>"
+            f"<div style='text-align:right'>"
+            f"<div style='font-size:11px;color:#888'>TPA: {preauth['tpa_name']}</div>"
+            f"<div style='font-size:11px;color:#888'>Response time: {preauth['response_time']}</div>"
+            f"<div style='font-size:11px;color:#888'>Confidence: {d_conf}</div>"
+            f"<div style='font-size:11px;color:{esc_color};font-weight:600'>"
+            f"Escalation risk: {esc}</div>"
+            f"</div></div></div>",
+            unsafe_allow_html=True
+        )
+
+        # Amount breakdown
+        pa_col1, pa_col2, pa_col3 = st.columns(3)
+        with pa_col1:
+            claimed = preauth.get("claimed_amount", 0)
+            try:
+                claimed_fmt = f"Rs.{float(str(claimed).replace(',','').replace('Rs.','').strip()):,.0f}"
+            except Exception:
+                claimed_fmt = f"Rs.{claimed}"
+            st.metric("Amount Claimed", claimed_fmt)
+        with pa_col2:
+            approved = preauth.get("approved_amount", 0)
+            st.metric("Likely Approved", f"Rs.{approved:,}")
+        with pa_col3:
+            deduction = preauth.get("deduction_amount", 0)
+            st.metric("Expected Deduction", f"Rs.{deduction:,}",
+                      delta=f"-{deduction:,}" if deduction > 0 else None,
+                      delta_color="inverse")
+
+        # Deduction reasons
+        if preauth.get("deduction_reasons"):
+            with st.expander("📊 View deduction breakdown"):
+                for reason in preauth["deduction_reasons"]:
+                    st.markdown(f"• {reason}")
+
+        # TPA queries
+        if preauth.get("tpa_queries"):
+            st.markdown("**📋 Likely TPA Queries on this Pre-Auth:**")
+            for q in preauth["tpa_queries"][:5]:
+                sev   = q.get("severity", "LOW")
+                color = "#E24B4A" if sev == "HIGH" else "#EF9F27" if sev == "MEDIUM" else "#0F6E56"
+                st.markdown(
+                    f"<div style='padding:8px 12px;margin-bottom:6px;border-radius:6px;"
+                    f"border-left:3px solid {color};background:#FAFAF8'>"
+                    f"<span style='font-size:11px;font-weight:700;color:{color}'>{sev}</span>"
+                    f"&nbsp;&nbsp;<span style='font-size:13px;color:#1A1A1A'>{q['query']}</span><br/>"
+                    f"<span style='font-size:12px;color:#555'>Fix: {q['fix']}</span>"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
+
+        # Recommendations
+        if preauth.get("recommendations"):
+            st.markdown("**✅ Actions Before Submitting Pre-Auth:**")
+            for rec in preauth["recommendations"]:
+                p_color = "#E24B4A" if rec["priority"] in ["CRITICAL","HIGH"] else "#EF9F27" if rec["priority"] == "MEDIUM" else "#0F6E56"
+                st.markdown(
+                    f"<div style='padding:10px 14px;margin-bottom:6px;border-radius:6px;"
+                    f"border-left:3px solid {p_color};background:#FAFAF8'>"
+                    f"<strong style='color:#1A1A1A'>{rec['icon']} {rec['action']}</strong><br/>"
+                    f"<span style='font-size:12px;color:#555'>{rec['detail']}</span>"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
+
+        st.caption(f"Ref: IRDAI/HLT/CIR/2023/205 — TPA must respond within {preauth['response_time']} of pre-auth request")
 
         # ── Compliance findings ───────────────────────────────────────────────
         st.markdown("### ⚖️ Compliance Findings")

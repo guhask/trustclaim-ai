@@ -16,6 +16,7 @@ from agents.document_agent   import DocumentIntelligenceAgent
 from agents.compliance_agent  import ComplianceGuardrailAgent
 from agents.prediction_agent  import ClaimPredictionAgent
 from agents.audit_agent       import AuditTrailAgent
+from agents.preauth_agent     import PreAuthSimulatorAgent
 
 
 class Orchestrator:
@@ -25,6 +26,7 @@ class Orchestrator:
         self.compliance_agent = ComplianceGuardrailAgent()
         self.prediction_agent = ClaimPredictionAgent()
         self.audit_agent      = AuditTrailAgent()
+        self.preauth_agent    = PreAuthSimulatorAgent()
 
         self.session_id   = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.status_log   = []
@@ -42,7 +44,7 @@ class Orchestrator:
             self.status_log.append({"step": step, "msg": msg,
                                      "ts": datetime.now().isoformat()})
             if progress_callback:
-                progress_callback(step, 6, msg)
+                progress_callback(step, 7, msg)
 
         try:
             # ── Step 1: Extract policy ────────────────────────────────────────
@@ -134,8 +136,27 @@ class Orchestrator:
                 details={"probability": prediction["approval_probability"]}
             )
 
-            # ── Step 6: Generate audit PDF ────────────────────────────────────
-            update(6, "Audit Trail Agent — Generating compliance report PDF...")
+            # ── Step 6: Pre-auth simulation ───────────────────────────────────
+            update(6, "Pre-Auth Simulator — Simulating TPA cashless response...")
+            preauth_result = self.preauth_agent.simulate(
+                policy_data, bill_data, discharge_data,
+                compliance_report, prediction
+            )
+
+            self.audit_agent.log(
+                agent="Pre-Auth Simulator Agent",
+                action="TPA pre-authorization simulation",
+                input_summary="Policy + Compliance + Prediction data",
+                output_summary=(
+                    f"Simulated decision: {preauth_result['decision']}. "
+                    f"Approved: Rs.{preauth_result['approved_amount']:,}. "
+                    f"Queries: {len(preauth_result['tpa_queries'])}."
+                ),
+                regulation_ref="IRDAI/HLT/CIR/2023/205"
+            )
+
+            # ── Step 7: Generate audit PDF ────────────────────────────────────
+            update(7, "Audit Trail Agent — Generating compliance report PDF...")
             pdf_path = os.path.join(
                 tempfile.gettempdir(),
                 f"TrustClaim_Report_{self.session_id}.pdf"
@@ -161,6 +182,7 @@ class Orchestrator:
                 "discharge_data":    discharge_data,
                 "compliance_report": compliance_report,
                 "prediction":        prediction,
+                "preauth_result":    preauth_result,
                 "pdf_path":          pdf_path,
                 "audit_trail":       self.audit_agent.get_trail(),
                 "status_log":        self.status_log,
