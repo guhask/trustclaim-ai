@@ -30,80 +30,257 @@ st.set_page_config(
 # ── Custom CSS ────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-  /* ── Brand colors ── */
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap');
+
   :root {
-    --teal:  #0F6E56;
-    --green: #1D9E75;
-    --red:   #E24B4A;
-    --amber: #EF9F27;
-    --blue:  #185FA5;
+    --teal-dark:  #0A4A38;
+    --teal:       #0F6E56;
+    --teal-mid:   #1D9E75;
+    --teal-light: #E1F5EE;
+    --teal-xlt:   #F0FBF7;
+    --amber:      #EF9F27;
+    --amber-lt:   #FAEEDA;
+    --red:        #E24B4A;
+    --red-lt:     #FCEBEB;
+    --blue:       #185FA5;
+    --blue-lt:    #E6F1FB;
+    --ink:        #1A1A1A;
+    --ink-muted:  #555555;
+    --ink-faint:  #888888;
+    --border:     #E2E2DC;
+    --surface:    #FAFAF8;
+    --white:      #FFFFFF;
   }
 
-  /* ── Header ── */
-  .brand-header {
-    background: linear-gradient(135deg, #0F6E56 0%, #1D9E75 100%);
-    padding: 1.5rem 2rem;
-    border-radius: 12px;
-    color: white;
-    margin-bottom: 1.5rem;
+  html, body, [class*="css"] {
+    font-family: 'DM Sans', sans-serif;
   }
-  .brand-header h1 { color: white; margin: 0; font-size: 2rem; }
-  .brand-header p  { color: rgba(255,255,255,0.85); margin: 0.3rem 0 0; font-size: 1rem; }
+
+  /* ── Force light background regardless of system theme ── */
+  .stApp {
+    background-color: #FAFAF8 !important;
+  }
+  [data-testid="stAppViewContainer"] {
+    background-color: #FAFAF8 !important;
+  }
+  [data-testid="stMain"] {
+    background-color: #FAFAF8 !important;
+  }
+
+  /* ── Hide Streamlit chrome ── */
+  footer { visibility: hidden; }
+  #MainMenu { visibility: hidden; }
+  .stDeployButton { display: none; }
+  header[data-testid="stHeader"] { background: transparent; }
+
+  /* ── Main header ── */
+  .tc-hero {
+    position: relative;
+    background: linear-gradient(135deg, #0A4A38 0%, #0F6E56 50%, #1D9E75 100%);
+    border-radius: 16px;
+    padding: 2.5rem 2.5rem 2rem;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+  }
+  .tc-hero::before {
+    content: '';
+    position: absolute;
+    top: -40px; right: -40px;
+    width: 220px; height: 220px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 50%;
+  }
+  .tc-hero::after {
+    content: '';
+    position: absolute;
+    bottom: -60px; left: 30%;
+    width: 300px; height: 300px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 50%;
+  }
+  .tc-hero-eyebrow {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.6);
+    margin-bottom: 0.5rem;
+  }
+  .tc-hero h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 2.6rem;
+    font-weight: 400;
+    color: white;
+    margin: 0 0 0.5rem;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+  }
+  .tc-hero h1 span {
+    color: #5DDBB0;
+  }
+  .tc-hero p {
+    color: rgba(255,255,255,0.75);
+    font-size: 0.95rem;
+    margin: 0;
+    font-weight: 300;
+    letter-spacing: 0.01em;
+  }
+  .tc-hero-pills {
+    display: flex;
+    gap: 8px;
+    margin-top: 1.2rem;
+    flex-wrap: wrap;
+  }
+  .tc-pill {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.85);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 12px;
+    border-radius: 20px;
+    letter-spacing: 0.02em;
+  }
+
+  /* ── Stat boxes ── */
+  .stat-box {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 0.75rem;
+    text-align: center;
+    transition: box-shadow 0.2s;
+  }
+  .stat-box:hover { box-shadow: 0 4px 16px rgba(15,110,86,0.1); }
+  .stat-num  {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.9rem;
+    font-weight: 400;
+    color: var(--teal);
+    line-height: 1;
+  }
+  .stat-lab  { font-size: 0.7rem; color: var(--ink-faint); margin-top: 4px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
 
   /* ── Score card ── */
   .score-card {
-    border-radius: 12px;
-    padding: 1.5rem;
+    border-radius: 14px;
+    padding: 1.4rem 1rem;
     text-align: center;
     font-weight: 600;
+    transition: transform 0.2s;
   }
-  .score-green  { background: #E1F5EE; color: #0F6E56; border: 2px solid #1D9E75; }
-  .score-orange { background: #FAEEDA; color: #854F0B; border: 2px solid #EF9F27; }
-  .score-red    { background: #FCEBEB; color: #A32D2D; border: 2px solid #E24B4A; }
-
-  /* ── Risk badge ── */
-  .badge-critical { background:#E24B4A; color:white; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:600; }
-  .badge-high     { background:#F0957B; color:#4A1B0C; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:600; }
-  .badge-medium   { background:#FAEEDA; color:#854F0B; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:600; }
-  .badge-low      { background:#E1F5EE; color:#085041; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:600; }
+  .score-card:hover { transform: translateY(-2px); }
+  .score-green  { background: var(--teal-light); color: var(--teal); border: 2px solid var(--teal-mid); }
+  .score-orange { background: var(--amber-lt);   color: #7A4500;     border: 2px solid var(--amber); }
+  .score-red    { background: var(--red-lt);     color: #8B1A1A;     border: 2px solid var(--red); }
 
   /* ── Info card ── */
   .info-card {
-    background: #F1EFE8;
-    border-radius: 8px;
-    padding: 1rem;
+    background: var(--teal-xlt);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
     margin: 0.5rem 0;
-    border-left: 3px solid #0F6E56;
+    border-left: 3px solid var(--teal);
   }
 
-  /* ── Stat box ── */
-  .stat-box {
-    background: white;
-    border: 1px solid #D3D1C7;
-    border-radius: 8px;
-    padding: 1rem;
-    text-align: center;
-  }
-  .stat-num  { font-size: 1.8rem; font-weight: 700; color: #0F6E56; }
-  .stat-lab  { font-size: 0.75rem; color: #888780; margin-top: 2px; }
-
-  /* ── Step tracker ── */
-  .step-active   { background: #0F6E56; color: white; }
-  .step-done     { background: #1D9E75; color: white; }
-  .step-pending  { background: #F1EFE8; color: #888780; }
+  /* ── Risk badges ── */
+  .badge-critical { background:#E24B4A; color:white;   padding:3px 10px; border-radius:20px; font-size:11px; font-weight:600; letter-spacing:0.03em; }
+  .badge-high     { background:#F28B72; color:#4A1B0C; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:600; }
+  .badge-medium   { background:#FAEEDA; color:#7A4500; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:600; }
+  .badge-low      { background:#E1F5EE; color:#085041; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:600; }
 
   /* ── Fix step ── */
   .fix-step {
-    background: #F9F9F7;
-    border-left: 3px solid #185FA5;
-    border-radius: 0 8px 8px 0;
-    padding: 0.75rem 1rem;
+    background: var(--surface);
+    border-left: 3px solid var(--blue);
+    border-radius: 0 10px 10px 0;
+    padding: 0.85rem 1.1rem;
     margin: 0.4rem 0;
   }
-  
-  /* Hide streamlit branding */
-  footer { visibility: hidden; }
-  #MainMenu { visibility: hidden; }
+
+  /* ── Section heading style ── */
+  .tc-section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--teal);
+    margin-bottom: 0.3rem;
+  }
+
+  /* ── Sidebar refinements ── */
+  [data-testid="stSidebar"] {
+    background: #F7F7F5;
+    border-right: 1px solid var(--border);
+  }
+  [data-testid="stSidebar"] .stMarkdown h2 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.3rem;
+    font-weight: 400;
+    color: var(--teal-dark);
+  }
+
+  /* ── Tab refinements ── */
+  [data-testid="stTab"] {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+  }
+
+  /* ── Metric refinements ── */
+  [data-testid="stMetric"] label {
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-muted) !important;
+  }
+  [data-testid="stMetricValue"] {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.4rem !important;
+    color: var(--ink) !important;
+  }
+
+  /* ── Upload area ── */
+  [data-testid="stFileUploader"] {
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    transition: border-color 0.2s;
+  }
+  [data-testid="stFileUploader"]:hover {
+    border-color: var(--teal-mid);
+  }
+
+  /* ── Button refinements ── */
+  [data-testid="stButton"] > button {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    border-radius: 8px;
+    transition: all 0.2s;
+  }
+  [data-testid="stButton"] > button[kind="primary"] {
+    background: var(--teal);
+    border-color: var(--teal);
+  }
+  [data-testid="stButton"] > button[kind="primary"]:hover {
+    background: var(--teal-dark);
+    border-color: var(--teal-dark);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(15,110,86,0.3);
+  }
+
+  /* ── Progress bar ── */
+  [data-testid="stProgress"] > div > div {
+    background: var(--teal) !important;
+  }
+
+  /* ── Expander ── */
+  [data-testid="stExpander"] {
+    border: 1px solid var(--border) !important;
+    border-radius: 10px !important;
+  }
 </style>
 """, unsafe_allow_html=True)
 
@@ -118,50 +295,88 @@ if "active_tab" not in st.session_state: st.session_state.active_tab = 0
 # SIDEBAR
 # ═══════════════════════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown("## 🏥 TrustClaim AI")
-    st.caption(APP_VERSION)
+    st.markdown(
+        "<div style='padding:0.5rem 0 1rem'>"
+        "<div style='font-family:DM Serif Display,serif;font-size:1.4rem;"
+        "color:#0A4A38;font-weight:400'>TrustClaim AI</div>"
+        "<div style='font-size:10px;color:#888;letter-spacing:0.08em;"
+        "text-transform:uppercase;font-weight:600'>Pre-Filing Intelligence</div>"
+        "</div>",
+        unsafe_allow_html=True
+    )
     st.divider()
 
-    st.markdown("### 📊 India's Claim Crisis")
+    st.markdown(
+        "<div class='tc-section-label'>India's Claim Crisis</div>",
+        unsafe_allow_html=True
+    )
     cols = st.columns(2)
     with cols[0]:
-        st.markdown('<div class="stat-box"><div class="stat-num">40%</div><div class="stat-lab">Claims Rejected</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="stat-box"><div class="stat-num">40%</div><div class="stat-lab">Rejected</div></div>', unsafe_allow_html=True)
     with cols[1]:
         st.markdown('<div class="stat-box"><div class="stat-num">80%</div><div class="stat-lab">Preventable</div></div>', unsafe_allow_html=True)
-
-    st.markdown("")
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
     cols2 = st.columns(2)
     with cols2[0]:
-        st.markdown('<div class="stat-box"><div class="stat-num">2Cr</div><div class="stat-lab">Rejections/Year</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="stat-box"><div class="stat-num">2Cr</div><div class="stat-lab">Rejections/yr</div></div>', unsafe_allow_html=True)
     with cols2[1]:
-        st.markdown('<div class="stat-box"><div class="stat-num">30d</div><div class="stat-lab">Avg Settlement</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="stat-box"><div class="stat-num">30d</div><div class="stat-lab">Avg Settle</div></div>', unsafe_allow_html=True)
 
     st.divider()
-    st.markdown("### 🏢 Supported Insurers")
+    st.markdown(
+        "<div class='tc-section-label'>IRDAI Compliance</div>",
+        unsafe_allow_html=True
+    )
+    st.markdown(
+        "<div style='background:#E1F5EE;border-radius:8px;padding:10px 12px;"
+        "border-left:3px solid #0F6E56;margin-bottom:4px'>"
+        "<span style='color:#085041;font-size:13px;font-weight:500'>"
+        "12 regulations checked per claim</span></div>",
+        unsafe_allow_html=True
+    )
+
+    st.divider()
+    st.markdown(
+        "<div class='tc-section-label'>Supported Insurers</div>",
+        unsafe_allow_html=True
+    )
     for ins in SUPPORTED_INSURERS[:6]:
-        st.markdown(f"• {ins}")
-    st.caption("+ 4 more insurers")
+        st.markdown(
+            f"<div style='font-size:12px;color:#444;padding:3px 0;"
+            f"border-bottom:1px solid #F0EFE8'>"
+            f"<span style='color:#0F6E56;font-weight:600'>›</span> {ins}</div>",
+            unsafe_allow_html=True
+        )
+    st.caption("+ 4 more insurers covered")
 
     st.divider()
-    st.markdown("### ⚖️ IRDAI Compliance")
-    st.success("12 IRDAI regulations actively checked on every claim")
-
-    st.divider()
-    st.markdown("### 🔗 Quick Links")
-    st.markdown("- [IRDAI Bima Bharosa](https://bimabharosa.irdai.gov.in)")
-    st.markdown("- [Insurance Ombudsman](https://cioins.co.in)")
-    st.markdown("- [IRDAI Official](https://irdai.gov.in)")
+    st.markdown(
+        "<div class='tc-section-label'>Quick Links</div>",
+        unsafe_allow_html=True
+    )
+    st.markdown("🔗 [IRDAI Bima Bharosa](https://bimabharosa.irdai.gov.in)")
+    st.markdown("🔗 [Insurance Ombudsman](https://cioins.co.in)")
+    st.markdown("🔗 [IRDAI Official](https://irdai.gov.in)")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # MAIN CONTENT
 # ═══════════════════════════════════════════════════════════════════════════════
-st.markdown("""
-<div class="brand-header">
-  <h1>🏥 TrustClaim AI</h1>
-  <p>India's First Pre-Filing Claim Intelligence Platform · Know before you file · Prevent rejections</p>
-</div>
-""", unsafe_allow_html=True)
+st.markdown(
+    "<div class='tc-hero'>"
+    "<div class='tc-hero-eyebrow'>ET AI Hackathon 2026 · PS5 Domain-Specialized Agent</div>"
+    "<h1>TrustClaim <span>AI</span></h1>"
+    "<p>India's first pre-filing claim intelligence platform — know before you file, prevent rejections, protect your family.</p>"
+    "<div class='tc-hero-pills'>"
+    "<span class='tc-pill'>5 AI Agents</span>"
+    "<span class='tc-pill'>12 IRDAI Regulations</span>"
+    "<span class='tc-pill'>10 Indian Insurers</span>"
+    "<span class='tc-pill'>87% Prediction Accuracy</span>"
+    "<span class='tc-pill'>Real-time Audit Trail</span>"
+    "</div>"
+    "</div>",
+    unsafe_allow_html=True
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -382,14 +597,58 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 # TAB 1: UPLOAD & ANALYZE
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab1:
-    st.markdown("### Upload Your Documents")
-    st.info("🔒 Your documents are processed securely and never stored. Analysis happens in real-time.")
+    # ── How it works strip ────────────────────────────────────────────────────
+    st.markdown(
+        "<div style='display:flex;gap:0;margin-bottom:1.5rem;border:1px solid #E2E2DC;"
+        "border-radius:12px;overflow:hidden'>"
+
+        "<div style='flex:1;padding:1rem 1.2rem;background:#F7F7F5;border-right:1px solid #E2E2DC'>"
+        "<div style='font-size:22px;margin-bottom:4px'>📤</div>"
+        "<div style='font-weight:600;font-size:13px;color:#0A4A38'>Step 1 — Upload</div>"
+        "<div style='font-size:12px;color:#666;margin-top:2px'>Policy + Hospital Bill + Discharge Summary</div>"
+        "</div>"
+
+        "<div style='flex:1;padding:1rem 1.2rem;background:#F7F7F5;border-right:1px solid #E2E2DC'>"
+        "<div style='font-size:22px;margin-bottom:4px'>⚖️</div>"
+        "<div style='font-weight:600;font-size:13px;color:#0A4A38'>Step 2 — AI Analysis</div>"
+        "<div style='font-size:12px;color:#666;margin-top:2px'>5 agents check 12 IRDAI regulations in real-time</div>"
+        "</div>"
+
+        "<div style='flex:1;padding:1rem 1.2rem;background:#F7F7F5;border-right:1px solid #E2E2DC'>"
+        "<div style='font-size:22px;margin-bottom:4px'>🎯</div>"
+        "<div style='font-weight:600;font-size:13px;color:#0A4A38'>Step 3 — Predict</div>"
+        "<div style='font-size:12px;color:#666;margin-top:2px'>Approval probability + top rejection risks</div>"
+        "</div>"
+
+        "<div style='flex:1;padding:1rem 1.2rem;background:#E1F5EE'>"
+        "<div style='font-size:22px;margin-bottom:4px'>📥</div>"
+        "<div style='font-weight:600;font-size:13px;color:#0A4A38'>Step 4 — Report</div>"
+        "<div style='font-size:12px;color:#085041;margin-top:2px'>Download audit PDF with IRDAI citations</div>"
+        "</div>"
+
+        "</div>",
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        "<div style='font-size:12px;color:#888;margin-bottom:1rem;"
+        "display:flex;align-items:center;gap:6px'>"
+        "<span style='color:#0F6E56'>🔒</span>"
+        "Documents are processed securely and never stored. Analysis happens in real-time."
+        "</div>",
+        unsafe_allow_html=True
+    )
 
     col_a, col_b, col_c = st.columns(3)
 
     with col_a:
-        st.markdown("#### 📋 Policy Document")
-        st.caption("Your health insurance policy copy or e-card")
+        st.markdown(
+            "<div style='font-weight:600;font-size:13px;color:#0A4A38;"
+            "margin-bottom:4px'>📋 Policy Document</div>"
+            "<div style='font-size:11px;color:#888;margin-bottom:8px'>"
+            "Your health insurance policy copy or e-card</div>",
+            unsafe_allow_html=True
+        )
         policy_file = st.file_uploader(
             "Upload Policy PDF/Image",
             type=["pdf", "png", "jpg", "jpeg"],
@@ -400,8 +659,13 @@ with tab1:
             st.success(f"✓ {policy_file.name}")
 
     with col_b:
-        st.markdown("#### 🏥 Hospital Bill")
-        st.caption("Final itemized hospital bill/invoice")
+        st.markdown(
+            "<div style='font-weight:600;font-size:13px;color:#0A4A38;"
+            "margin-bottom:4px'>🏥 Hospital Bill</div>"
+            "<div style='font-size:11px;color:#888;margin-bottom:8px'>"
+            "Final itemized hospital bill/invoice</div>",
+            unsafe_allow_html=True
+        )
         bill_file = st.file_uploader(
             "Upload Hospital Bill",
             type=["pdf", "png", "jpg", "jpeg"],
@@ -412,8 +676,13 @@ with tab1:
             st.success(f"✓ {bill_file.name}")
 
     with col_c:
-        st.markdown("#### 📄 Discharge Summary")
-        st.caption("Hospital discharge summary with diagnosis")
+        st.markdown(
+            "<div style='font-weight:600;font-size:13px;color:#0A4A38;"
+            "margin-bottom:4px'>📄 Discharge Summary</div>"
+            "<div style='font-size:11px;color:#888;margin-bottom:8px'>"
+            "Hospital discharge summary with diagnosis</div>",
+            unsafe_allow_html=True
+        )
         discharge_file = st.file_uploader(
             "Upload Discharge Summary",
             type=["pdf", "png", "jpg", "jpeg"],
@@ -730,10 +999,10 @@ with tab3:
     col_in1, col_in2, col_in3 = st.columns([3, 1, 1])
     with col_in1:
         condition_input = st.text_input(
-            "Health condition or diagnosis",
+            "Condition / Diagnosis",
             value=st.session_state.chip_condition,
             placeholder="e.g. diabetes, knee replacement, cardiac surgery, cancer...",
-            label_visibility="collapsed",
+            label_visibility="visible",
             key="condition_text_input"
         )
         st.session_state.chip_condition = condition_input
@@ -923,19 +1192,26 @@ with tab3:
     elif not condition_input:
         st.markdown("")
         st.markdown("#### 🏥 10 Major Indian Insurers Covered")
+        st.caption("Enter a condition above or click a chip to see how each insurer ranks for your needs.")
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
         ins_cols = st.columns(5)
         for i, ins in enumerate(INSURER_PROFILES):
             with ins_cols[i % 5]:
                 st.markdown(
                     f"<div style='background:white;border:1px solid #D3D1C7;"
-                    f"border-radius:8px;padding:10px;text-align:center;margin-bottom:8px'>"
-                    f"<div style='width:28px;height:28px;border-radius:6px;"
-                    f"background:{ins['logo_color']};margin:0 auto 4px;display:flex;"
+                    f"border-radius:10px;padding:14px 10px;text-align:center;"
+                    f"margin-bottom:10px;min-height:100px'>"
+                    f"<div style='width:38px;height:38px;border-radius:8px;"
+                    f"background:{ins['logo_color']};margin:0 auto 8px;display:flex;"
                     f"align-items:center;justify-content:center'>"
-                    f"<span style='color:white;font-size:11px;font-weight:700'>"
+                    f"<span style='color:white;font-size:13px;font-weight:700'>"
                     f"{ins['short_name'][:2].upper()}</span></div>"
-                    f"<div style='font-size:11px;font-weight:500'>{ins['short_name']}</div>"
-                    f"<div style='font-size:10px;color:#888'>{ins['claim_settlement_ratio']}% CSR</div>"
+                    f"<div style='font-size:12px;font-weight:600;color:#1A1A1A;"
+                    f"line-height:1.3;margin-bottom:4px'>{ins['short_name']}</div>"
+                    f"<div style='font-size:11px;color:#0F6E56;font-weight:600'>"
+                    f"{ins['claim_settlement_ratio']}% settled</div>"
+                    f"<div style='font-size:10px;color:#888;margin-top:2px'>"
+                    f"{ins['network_hospitals']:,} hospitals</div>"
                     f"</div>", unsafe_allow_html=True)
 
 
@@ -1015,14 +1291,25 @@ with tab5:
 
     st.divider()
     st.markdown("#### 📈 Validated Performance")
-    m1, m2, m3, m4 = st.columns(4)
-    with m1:
-        st.metric("Policy Extraction", "92%", "accuracy")
-    with m2:
-        st.metric("Claim Prediction", "87%", "accuracy")
-    with m3:
-        st.metric("Analysis Time", "<60s", "per claim")
-    with m4:
-        st.metric("Regulations Checked", "12", "per claim")
+    perf_cols = st.columns(4)
+    perf_data = [
+        ("92%",  "Policy Extraction",   "accuracy on real documents",  "#0F6E56"),
+        ("87%",  "Claim Prediction",    "approval probability accuracy","#185FA5"),
+        ("<60s", "Analysis Time",       "per claim end-to-end",        "#854F0B"),
+        ("12",   "IRDAI Regulations",   "checked on every claim",      "#8B1A1A"),
+    ]
+    for col, (val, label, sub, color) in zip(perf_cols, perf_data):
+        with col:
+            st.markdown(
+                f"<div style='background:white;border:1px solid #E2E2DC;"
+                f"border-radius:10px;padding:1.2rem;text-align:center'>"
+                f"<div style='font-family:DM Serif Display,serif;font-size:2rem;"
+                f"font-weight:400;color:{color};line-height:1'>{val}</div>"
+                f"<div style='font-size:12px;font-weight:600;color:#1A1A1A;"
+                f"margin-top:6px'>{label}</div>"
+                f"<div style='font-size:11px;color:#888;margin-top:3px'>{sub}</div>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
 
 
