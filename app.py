@@ -15,6 +15,7 @@ sys.path.append(os.path.dirname(__file__))
 from agents.orchestrator import Orchestrator
 from core.config import APP_TITLE, APP_SUBTITLE, APP_VERSION, SUPPORTED_INSURERS
 from data.irdai_rules.knowledge_base import COMMON_REJECTION_REASONS
+from data.insurer_data.insurer_profiles import INSURER_PROFILES
 
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -367,9 +368,10 @@ def _get_demo_result(scenario: str) -> dict:
 
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🔍 Analyze Claim",
     "📊 Results & Report",
+    "🏢 Find Best Insurer",
     "📚 Know Your Rights",
     "ℹ️ How It Works"
 ])
@@ -706,9 +708,213 @@ with tab2:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TAB 3: KNOW YOUR RIGHTS
+# TAB 3: FIND BEST INSURER (NEW)
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab3:
+    st.markdown("### 🏢 Find the Best Insurer for Your Condition")
+    st.info("Enter any health condition or diagnosis. Our AI will rank all 10 major Indian insurers by how well they cover it.")
+
+    # ── Search form ───────────────────────────────────────────────────────────
+    col_in1, col_in2, col_in3 = st.columns([3, 1, 1])
+    with col_in1:
+        condition_input = st.text_input(
+            "Health condition or diagnosis",
+            placeholder="e.g. diabetes, knee replacement, cardiac surgery, cancer...",
+            label_visibility="collapsed"
+        )
+    with col_in2:
+        age_input = st.number_input("Age", min_value=1, max_value=99,
+                                     value=35, label_visibility="visible")
+    with col_in3:
+        budget_input = st.selectbox("Budget", ["Medium", "Low", "High"],
+                                     label_visibility="visible")
+
+    search_btn = st.button("🔍 Find Best Insurers",
+                            type="primary",
+                            disabled=not condition_input,
+                            use_container_width=True)
+
+    # ── Quick condition chips ─────────────────────────────────────────────────
+    st.markdown("**Quick search:**")
+    chip_cols = st.columns(8)
+    conditions = ["Diabetes", "Cardiac", "Cancer", "Kidney",
+                  "Maternity", "Knee Surgery", "Hypertension", "Senior"]
+    for i, cond in enumerate(conditions):
+        with chip_cols[i]:
+            if st.button(cond, key=f"chip_{cond}", use_container_width=True):
+                condition_input = cond
+                search_btn      = True
+
+    # ── Run matching ──────────────────────────────────────────────────────────
+    if search_btn and condition_input:
+        with st.spinner(f"Analysing {len(INSURER_PROFILES)} insurers for '{condition_input}'..."):
+            from agents.insurer_matching_agent import InsurerMatchingAgent
+            matcher = InsurerMatchingAgent()
+            match_result = matcher.match(
+                condition=condition_input,
+                age=age_input,
+                budget=budget_input.lower()
+            )
+
+        # ── LLM summary ───────────────────────────────────────────────────────
+        if match_result.get("llm_summary"):
+            st.markdown(f"""
+            <div class="info-card" style="border-color:#0F6E56;background:#E1F5EE">
+              <strong>🧠 Expert Summary</strong><br/>
+              {match_result['llm_summary']}
+            </div>""", unsafe_allow_html=True)
+
+        if match_result.get("key_warning"):
+            st.markdown(f"""
+            <div class="info-card" style="border-color:#EF9F27;background:#FAEEDA">
+              <strong>⚠️ Important Warning</strong><br/>
+              {match_result['key_warning']}
+            </div>""", unsafe_allow_html=True)
+
+        st.divider()
+
+        # ── Ranked insurer cards ──────────────────────────────────────────────
+        st.markdown(f"### Top Insurers for **{condition_input}**")
+        st.caption(f"Ranked by condition coverage, claim settlement ratio, age suitability, and budget fit")
+
+        ranked = match_result.get("ranked_insurers", [])
+
+        for ins in ranked[:7]:
+            is_top = ins.get("is_top_pick", False)
+            border = "border: 2px solid #0F6E56;" if is_top else ""
+            bg     = "background: #F0FBF7;" if is_top else ""
+
+            with st.container():
+                st.markdown(f"""
+                <div style="border-radius:12px;padding:16px;margin-bottom:10px;
+                            {border}{bg}border: {'2px solid #0F6E56' if is_top else '1px solid #D3D1C7'};
+                            background: {'#F0FBF7' if is_top else 'white'}">
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <div style="display:flex;align-items:center;gap:10px">
+                      <div style="width:36px;height:36px;border-radius:8px;
+                                  background:{ins['logo_color']};display:flex;
+                                  align-items:center;justify-content:center;
+                                  color:white;font-weight:700;font-size:14px">
+                        {ins['rank']}
+                      </div>
+                      <div>
+                        <strong style="font-size:15px">{ins['short_name']}</strong>
+                        {"&nbsp;&nbsp;<span style='background:#0F6E56;color:white;font-size:11px;padding:2px 8px;border-radius:20px'>TOP PICK</span>" if is_top else ""}
+                        <div style="font-size:12px;color:#888">{ins['name']}</div>
+                      </div>
+                    </div>
+                    <div style="text-align:right">
+                      <div style="font-size:22px;font-weight:700;color:{'#0F6E56' if ins['score']>=70 else '#EF9F27' if ins['score']>=50 else '#E24B4A'}">
+                        {ins['score']}
+                      </div>
+                      <div style="font-size:11px;color:#888">match score</div>
+                    </div>
+                  </div>
+                </div>""", unsafe_allow_html=True)
+
+            # Metrics row
+            m1, m2, m3, m4, m5 = st.columns(5)
+            with m1:
+                st.metric("Claim Settlement", f"{ins['claim_settlement']}%")
+            with m2:
+                st.metric("Network Hospitals", f"{ins['network']:,}")
+            with m3:
+                st.metric("PED Waiting", f"{ins['ped_waiting']} months")
+            with m4:
+                st.metric("Sum Insured", ins['sum_insured'].replace("Rs. ","₹"))
+            with m5:
+                st.metric("Co-pay", ins['copay'][:15] if ins['copay'] else "Nil")
+
+            # Details expander
+            with st.expander(f"View details — {ins['short_name']}"):
+                dcol1, dcol2 = st.columns(2)
+
+                with dcol1:
+                    st.markdown("**✅ Why choose this insurer:**")
+                    for r in ins.get("reasons", []):
+                        st.markdown(f"• {r}")
+                    st.markdown("**💡 Recommended plans:**")
+                    for p in ins.get("best_plans", []):
+                        st.markdown(f"• {p}")
+
+                with dcol2:
+                    if ins.get("warnings"):
+                        st.markdown("**⚠️ Watch out for:**")
+                        for w in ins["warnings"]:
+                            st.markdown(f"• {w}")
+                    st.markdown("**📞 Claims helpline:**")
+                    st.markdown(f"`{ins['helpline']}`")
+                    st.markdown(f"**TPA:** {ins['tpa']}")
+
+                if is_top and ins.get("special_note"):
+                    st.success(f"🌟 **Why this is the top pick:** {ins['special_note']}")
+
+            st.markdown("")
+
+        # ── Action items ──────────────────────────────────────────────────────
+        st.divider()
+        st.markdown("### 📋 Your Action Plan")
+        for action in match_result.get("action_items", []):
+            priority = action["priority"]
+            col_style = (
+                "border-left: 3px solid #E24B4A; background: #FFF5F5;"
+                if priority == "HIGH"
+                else "border-left: 3px solid #EF9F27; background: #FFFBF0;"
+                if priority == "MEDIUM"
+                else "border-left: 3px solid #0F6E56; background: #F0FBF7;"
+            )
+            st.markdown(f"""
+            <div style="padding:12px 16px;border-radius:0 8px 8px 0;
+                        margin-bottom:8px;{col_style}">
+              <strong>{action['icon']} {action['action']}</strong><br/>
+              <span style="font-size:13px;color:#444">{action['detail']}</span>
+            </div>""", unsafe_allow_html=True)
+
+        # ── Comparison table ──────────────────────────────────────────────────
+        st.divider()
+        st.markdown("### 📊 Full Comparison Table")
+        import pandas as pd
+        df = pd.DataFrame([{
+            "Rank":              ins["rank"],
+            "Insurer":           ins["short_name"],
+            "Match Score":       f"{ins['score']}/100",
+            "Claim Settlement":  f"{ins['claim_settlement']}%",
+            "Network":           f"{ins['network']:,}",
+            "PED Waiting":       f"{ins['ped_waiting']} months",
+            "Sum Insured":       ins["sum_insured"],
+            "Co-pay":            ins["copay"][:20],
+            "Room Rent":         ins["room_rent"][:30],
+        } for ins in ranked[:10]])
+
+        st.dataframe(df, use_container_width=True, hide_index=True)
+
+    elif not condition_input:
+        # Show landing state
+        st.markdown("")
+        st.markdown("#### 🏥 10 Major Indian Insurers Covered")
+        ins_cols = st.columns(5)
+        for i, ins in enumerate(INSURER_PROFILES):
+            with ins_cols[i % 5]:
+                st.markdown(f"""
+                <div style="background:white;border:1px solid #D3D1C7;
+                            border-radius:8px;padding:10px;text-align:center;
+                            margin-bottom:8px">
+                  <div style="width:28px;height:28px;border-radius:6px;
+                              background:{ins['logo_color']};margin:0 auto 4px;
+                              display:flex;align-items:center;justify-content:center">
+                    <span style="color:white;font-size:11px;font-weight:700">
+                      {ins['short_name'][:2].upper()}
+                    </span>
+                  </div>
+                  <div style="font-size:11px;font-weight:500">{ins['short_name']}</div>
+                  <div style="font-size:10px;color:#888">{ins['claim_settlement_ratio']}% CSR</div>
+                </div>""", unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB 4: KNOW YOUR RIGHTS
+# ═══════════════════════════════════════════════════════════════════════════════
+with tab4:
     st.markdown("### 📚 Know Your IRDAI Rights")
     st.info("Understanding these rights can save your claim. Most policyholders don't know them.")
 
@@ -740,7 +946,7 @@ with tab3:
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 4: HOW IT WORKS
 # ═══════════════════════════════════════════════════════════════════════════════
-with tab4:
+with tab5:
     st.markdown("### 🤖 How TrustClaim AI Works")
 
     st.markdown("#### The 5-Agent Intelligence Pipeline")
