@@ -14,6 +14,7 @@ sys.path.append(os.path.dirname(__file__))
 
 from agents.orchestrator import Orchestrator
 from agents.insurer_matching_agent import InsurerMatchingAgent
+from agents.fraud_agent import FraudDetectionAgent
 from core.config import APP_TITLE, APP_SUBTITLE, APP_VERSION, SUPPORTED_INSURERS
 from data.irdai_rules.knowledge_base import COMMON_REJECTION_REASONS
 from data.insurer_data.insurer_profiles import INSURER_PROFILES
@@ -493,6 +494,10 @@ def _get_demo_result(scenario: str) -> dict:
             "room_type":           "Private",
             "room_rent_per_day":   5500 if "Scenario 3" in scenario else 2800,
             "total_bill_amount":   145000,
+            "doctor_fees":         9600  if "Scenario 1" in scenario else 15000 if "Scenario 2" in scenario else 20000,
+            "pharmacy_charges":    18400 if "Scenario 1" in scenario else 65000 if "Scenario 2" in scenario else 30000,
+            "investigation_charges": 11700 if "Scenario 1" in scenario else 8000 if "Scenario 2" in scenario else 12000,
+            "ot_charges":          12000 if "Scenario 1" in scenario else 0     if "Scenario 2" in scenario else 15000,
             "treating_doctor":     "Dr. Priya Venkataraman",
             "diagnosis_on_bill":   diagnosis,
             "confidence_score":    88
@@ -547,8 +552,9 @@ def _get_demo_result(scenario: str) -> dict:
                 "note":              "Estimated based on compliance analysis. Actual subject to insurer assessment."
             }
         },
-        "pdf_path":   None,
+        "pdf_path":      None,
         "preauth_result": None,
+        "fraud_result":  None,
         "audit_trail": [
             {"timestamp": "2026-03-17T10:00:01", "agent": "Document Intelligence Agent",
              "action": "Policy extraction",
@@ -749,6 +755,7 @@ with tab1:
             "Extracting discharge summary...",
             "Checking IRDAI compliance...",
             "Calculating approval probability...",
+            "Analysing bill for fraud signals...",
             "Simulating TPA pre-authorization...",
             "Generating audit report...",
         ]
@@ -758,6 +765,7 @@ with tab1:
             "Document Intelligence Agent",
             "Compliance Guardrail Agent",
             "Claim Prediction Agent",
+            "Fraud Detection Agent",
             "Pre-Auth Simulator Agent",
             "Audit Trail Agent",
         ]
@@ -1004,6 +1012,87 @@ with tab2:
                     st.markdown(f"{item['description']}")
                     st.markdown(f"📌 **IRDAI Ref:** `{item.get('irdai_ref','N/A')}`")
                     st.markdown(f"🔧 **Fix:** {item.get('fix','')}")
+
+        # ── Fraud Detection ───────────────────────────────────────────────────
+        st.divider()
+        st.markdown("### 🚨 Bill Fraud Analysis")
+        st.caption("AI analysis of hospital bill for inflated charges, suspicious patterns, and billing anomalies")
+
+        fraud = result.get("fraud_result")
+        if not fraud:
+            # Generate on-the-fly for demo mode
+            fa = FraudDetectionAgent()
+            fraud = fa.detect(
+                result["bill_data"],
+                result["discharge_data"],
+                result["policy_data"]
+            )
+
+        f_color = fraud["risk_color"]
+        f_icon  = fraud["risk_icon"]
+        f_level = fraud["risk_level"]
+        f_score = fraud["fraud_score"]
+
+        # Fraud score banner
+        fc1, fc2, fc3, fc4 = st.columns(4)
+        with fc1:
+            st.markdown(
+                f"<div style='background:{f_color}15;border:2px solid {f_color};"
+                f"border-radius:10px;padding:14px;text-align:center'>"
+                f"<div style='font-size:1.8rem'>{f_icon}</div>"
+                f"<div style='font-size:1.2rem;font-weight:700;color:{f_color}'>{f_level}</div>"
+                f"<div style='font-size:11px;color:#555;margin-top:2px'>Risk Level</div>"
+                f"</div>", unsafe_allow_html=True)
+        with fc2:
+            st.metric("Fraud Score", f"{f_score}/100")
+        with fc3:
+            st.metric("Flags Raised", fraud["total_flags"],
+                      delta=f"{fraud['high_flags']} HIGH" if fraud["high_flags"] > 0 else None,
+                      delta_color="inverse")
+        with fc4:
+            verdict = fraud.get("llm_verdict", "CLEAN")
+            v_color = "#E24B4A" if verdict == "LIKELY_FRAUD" else "#EF9F27" if verdict == "SUSPICIOUS" else "#0F6E56"
+            st.markdown(
+                f"<div style='background:{v_color}15;border:1px solid {v_color};"
+                f"border-radius:10px;padding:14px;text-align:center'>"
+                f"<div style='font-size:1.1rem;font-weight:700;color:{v_color}'>{verdict}</div>"
+                f"<div style='font-size:11px;color:#555;margin-top:2px'>AI Verdict</div>"
+                f"</div>", unsafe_allow_html=True)
+
+        if fraud.get("llm_summary"):
+            st.markdown(
+                f"<div class='info-card' style='border-color:{f_color};margin-top:10px'>"
+                f"<strong>🔍 Fraud Investigator Assessment</strong><br/>"
+                f"{fraud['llm_summary']}"
+                f"</div>", unsafe_allow_html=True)
+
+        # Fraud flags
+        if fraud.get("flags"):
+            st.markdown("**Anomalies Detected:**")
+            for flag in fraud["flags"]:
+                sev   = flag.get("severity", "LOW")
+                color = "#E24B4A" if sev == "HIGH" else "#EF9F27" if sev == "MEDIUM" else "#185FA5"
+                st.markdown(
+                    f"<div style='padding:10px 14px;margin-bottom:6px;border-radius:8px;"
+                    f"border-left:4px solid {color};background:#FAFAF8'>"
+                    f"<div style='display:flex;align-items:center;gap:8px'>"
+                    f"<span style='font-size:11px;font-weight:700;color:{color};"
+                    f"background:{color}20;padding:2px 8px;border-radius:20px'>{sev}</span>"
+                    f"<strong style='color:#1A1A1A'>{flag['title']}</strong></div>"
+                    f"<div style='font-size:12px;color:#555;margin-top:4px'>{flag['detail']}</div>"
+                    f"<div style='font-size:12px;color:#0F6E56;margin-top:4px'>"
+                    f"<strong>Action:</strong> {flag['action']}</div>"
+                    f"</div>", unsafe_allow_html=True)
+        else:
+            st.success("✅ No significant fraud indicators detected in this claim.")
+
+        if fraud.get("estimated_inflation") and fraud["estimated_inflation"] != "Unable to estimate":
+            st.info(f"💰 **Estimated Inflation:** {fraud['estimated_inflation']}")
+
+        st.markdown(
+            f"<div style='font-size:11px;color:#888;margin-top:6px'>"
+            f"<strong>Recommendation:</strong> {fraud['recommendation']}"
+            f"</div>", unsafe_allow_html=True)
 
         # ── Fix guide ─────────────────────────────────────────────────────────
         fix_guide = pred.get("fix_guide", [])

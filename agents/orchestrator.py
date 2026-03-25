@@ -12,11 +12,12 @@ from typing import Callable
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from agents.document_agent   import DocumentIntelligenceAgent
+from agents.document_agent    import DocumentIntelligenceAgent
 from agents.compliance_agent  import ComplianceGuardrailAgent
 from agents.prediction_agent  import ClaimPredictionAgent
 from agents.audit_agent       import AuditTrailAgent
 from agents.preauth_agent     import PreAuthSimulatorAgent
+from agents.fraud_agent       import FraudDetectionAgent
 
 
 class Orchestrator:
@@ -27,6 +28,7 @@ class Orchestrator:
         self.prediction_agent = ClaimPredictionAgent()
         self.audit_agent      = AuditTrailAgent()
         self.preauth_agent    = PreAuthSimulatorAgent()
+        self.fraud_agent      = FraudDetectionAgent()
 
         self.session_id   = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.status_log   = []
@@ -44,7 +46,7 @@ class Orchestrator:
             self.status_log.append({"step": step, "msg": msg,
                                      "ts": datetime.now().isoformat()})
             if progress_callback:
-                progress_callback(step, 7, msg)
+                progress_callback(step, 8, msg)
 
         try:
             # ── Step 1: Extract policy ────────────────────────────────────────
@@ -136,8 +138,27 @@ class Orchestrator:
                 details={"probability": prediction["approval_probability"]}
             )
 
-            # ── Step 6: Pre-auth simulation ───────────────────────────────────
-            update(6, "Pre-Auth Simulator — Simulating TPA cashless response...")
+            # ── Step 6: Fraud detection ───────────────────────────────────────
+            update(6, "Fraud Detection Agent — Analysing bill for anomalies...")
+            fraud_result = self.fraud_agent.detect(
+                bill_data, discharge_data, policy_data
+            )
+
+            self.audit_agent.log(
+                agent="Fraud Detection Agent",
+                action="Bill fraud analysis",
+                input_summary="Hospital bill + discharge summary",
+                output_summary=(
+                    f"Risk level: {fraud_result['risk_level']}. "
+                    f"Fraud score: {fraud_result['fraud_score']}/100. "
+                    f"Flags: {fraud_result['total_flags']} "
+                    f"({fraud_result['high_flags']} HIGH)."
+                ),
+                regulation_ref="IRDAI/HLT/CIR/2020/154"
+            )
+
+            # ── Step 7: Pre-auth simulation ───────────────────────────────────
+            update(7, "Pre-Auth Simulator — Simulating TPA cashless response...")
             preauth_result = self.preauth_agent.simulate(
                 policy_data, bill_data, discharge_data,
                 compliance_report, prediction
@@ -155,8 +176,8 @@ class Orchestrator:
                 regulation_ref="IRDAI/HLT/CIR/2023/205"
             )
 
-            # ── Step 7: Generate audit PDF ────────────────────────────────────
-            update(7, "Audit Trail Agent — Generating compliance report PDF...")
+            # ── Step 8: Generate audit PDF ────────────────────────────────────
+            update(8, "Audit Trail Agent — Generating compliance report PDF...")
             pdf_path = os.path.join(
                 tempfile.gettempdir(),
                 f"TrustClaim_Report_{self.session_id}.pdf"
@@ -182,6 +203,7 @@ class Orchestrator:
                 "discharge_data":    discharge_data,
                 "compliance_report": compliance_report,
                 "prediction":        prediction,
+                "fraud_result":      fraud_result,
                 "preauth_result":    preauth_result,
                 "pdf_path":          pdf_path,
                 "audit_trail":       self.audit_agent.get_trail(),
