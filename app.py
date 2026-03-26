@@ -8,6 +8,7 @@ import os
 import json
 import tempfile
 import time
+from datetime import datetime
 from pathlib import Path
 import sys
 sys.path.append(os.path.dirname(__file__))
@@ -320,9 +321,10 @@ obs.observe(document.body, { childList: true, subtree: true });
 
 
 # ── Session state init ────────────────────────────────────────────────────────
-if "result"     not in st.session_state: st.session_state.result     = None
-if "analysed"   not in st.session_state: st.session_state.analysed   = False
-if "active_tab" not in st.session_state: st.session_state.active_tab = 0
+if "result"         not in st.session_state: st.session_state.result         = None
+if "analysed"       not in st.session_state: st.session_state.analysed       = False
+if "active_tab"     not in st.session_state: st.session_state.active_tab     = 0
+if "claim_tracker"  not in st.session_state: st.session_state.claim_tracker  = []
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -624,11 +626,12 @@ def _get_demo_result(scenario: str) -> dict:
 
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "🔍 Analyze Claim",
     "📊 Results & Report",
     "🏢 Find Best Insurer",
     "✉️ Grievance Letter",
+    "📁 Claim Tracker",
     "📚 Know Your Rights",
     "ℹ️ How It Works"
 ])
@@ -896,6 +899,35 @@ with tab2:
 
         # ── Key insight ───────────────────────────────────────────────────────
         st.divider()
+
+        # Save to Tracker button
+        save_col, _ = st.columns([2, 5])
+        with save_col:
+            if st.button("💾 Save Claim to Tracker", use_container_width=True):
+                policy_no = result["policy_data"].get("policy_number", "Unknown")
+                # Check not already saved
+                existing_ids = [c["session_id"] for c in st.session_state.claim_tracker]
+                if result["session_id"] not in existing_ids:
+                    st.session_state.claim_tracker.append({
+                        "session_id":      result["session_id"],
+                        "saved_at":        datetime.now().strftime("%d %b %Y %I:%M %p"),
+                        "policy_number":   policy_no,
+                        "insurer":         result["policy_data"].get("insurer_name", "N/A"),
+                        "patient":         result["discharge_data"].get("patient_name", "N/A"),
+                        "diagnosis":       result["discharge_data"].get("primary_diagnosis", "N/A"),
+                        "hospital":        result["bill_data"].get("hospital_name", "N/A"),
+                        "total_bill":      result["bill_data"].get("total_bill_amount", "N/A"),
+                        "approval_prob":   pred["approval_probability"],
+                        "compliance":      comp["compliance_status"],
+                        "fraud_level":     (result.get("fraud_result") or {}).get("risk_level", "N/A"),
+                        "preauth":         (result.get("preauth_result") or {}).get("decision", "N/A"),
+                        "status":          "Analysis Done",
+                        "notes":           "",
+                    })
+                    st.success("✅ Claim saved to tracker! View it in the Claim Tracker tab.")
+                else:
+                    st.info("This claim is already in your tracker.")
+
         if pred.get("key_insight"):
             st.markdown(
                 "<div class='info-card'>"
@@ -1652,9 +1684,217 @@ with tab4:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TAB 5: KNOW YOUR RIGHTS
+# TAB 5: CLAIM TRACKER
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab5:
+    st.markdown("### 📁 Claim Status Tracker")
+    st.caption("Save analyzed claims and track their progress through the insurer system")
+
+    if not st.session_state.claim_tracker:
+        st.markdown(
+            "<div style='text-align:center;padding:3rem;background:#FAFAF8;"
+            "border-radius:12px;border:1px dashed #D3D1C7;margin-top:1rem'>"
+            "<div style='font-size:3rem;margin-bottom:1rem'>📋</div>"
+            "<div style='font-size:16px;font-weight:600;color:#444;margin-bottom:8px'>"
+            "No claims tracked yet</div>"
+            "<div style='font-size:13px;color:#888'>"
+            "Analyze a claim in the Analyze Claim tab, then click<br/>"
+            "<strong>💾 Save Claim to Tracker</strong> in the Results tab</div>"
+            "</div>",
+            unsafe_allow_html=True
+        )
+    else:
+        # ── Summary stats ──────────────────────────────────────────────────────
+        total   = len(st.session_state.claim_tracker)
+        high_p  = sum(1 for c in st.session_state.claim_tracker if c["approval_prob"] >= 70)
+        med_p   = sum(1 for c in st.session_state.claim_tracker if 40 <= c["approval_prob"] < 70)
+        low_p   = sum(1 for c in st.session_state.claim_tracker if c["approval_prob"] < 40)
+        fraud_r = sum(1 for c in st.session_state.claim_tracker if "MEDIUM" in c.get("fraud_level","") or "HIGH" in c.get("fraud_level",""))
+
+        s1, s2, s3, s4, s5 = st.columns(5)
+        stats = [
+            (s1, str(total),  "Total Claims",        "#0F6E56"),
+            (s2, str(high_p), "High Approval (70%+)", "#1D9E75"),
+            (s3, str(med_p),  "Medium Risk",          "#EF9F27"),
+            (s4, str(low_p),  "High Risk (<40%)",     "#E24B4A"),
+            (s5, str(fraud_r),"Fraud Flags",          "#8B1A1A"),
+        ]
+        for col, val, label, color in stats:
+            with col:
+                st.markdown(
+                    f"<div style='background:white;border:1px solid #E2E2DC;"
+                    f"border-radius:10px;padding:12px;text-align:center'>"
+                    f"<div style='font-size:1.8rem;font-weight:700;color:{color}'>{val}</div>"
+                    f"<div style='font-size:11px;color:#888;margin-top:3px'>{label}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
+
+        st.divider()
+
+        # ── Claim cards ────────────────────────────────────────────────────────
+        STATUS_OPTIONS = [
+            "Analysis Done", "Pre-Auth Requested", "Pre-Auth Approved",
+            "Claim Filed", "Under Review", "Additional Docs Requested",
+            "Approved", "Partially Approved", "Rejected", "Appealed",
+            "Ombudsman Filed", "Settled"
+        ]
+
+        STATUS_COLORS = {
+            "Analysis Done":             "#888",
+            "Pre-Auth Requested":        "#185FA5",
+            "Pre-Auth Approved":         "#1D9E75",
+            "Claim Filed":               "#185FA5",
+            "Under Review":              "#EF9F27",
+            "Additional Docs Requested": "#EF9F27",
+            "Approved":                  "#0F6E56",
+            "Partially Approved":        "#1D9E75",
+            "Rejected":                  "#E24B4A",
+            "Appealed":                  "#854F0B",
+            "Ombudsman Filed":           "#8B1A1A",
+            "Settled":                   "#0A4A38",
+        }
+
+        to_delete = None
+
+        for i, claim in enumerate(st.session_state.claim_tracker):
+            prob      = claim["approval_prob"]
+            prob_color = "#0F6E56" if prob >= 70 else "#EF9F27" if prob >= 40 else "#E24B4A"
+            status    = claim.get("status", "Analysis Done")
+            s_color   = STATUS_COLORS.get(status, "#888")
+            fraud     = claim.get("fraud_level", "N/A")
+            f_color   = "#E24B4A" if "HIGH" in fraud else "#EF9F27" if "MEDIUM" in fraud else "#0F6E56"
+
+            with st.container():
+                # Claim header
+                h_col1, h_col2, h_col3 = st.columns([4, 2, 1])
+                with h_col1:
+                    st.markdown(
+                        f"<div style='padding:12px 0 4px'>"
+                        f"<span style='font-size:15px;font-weight:600;color:#1A1A1A'>"
+                        f"{claim.get('insurer','N/A')}</span>"
+                        f"<span style='font-size:12px;color:#888;margin-left:10px'>"
+                        f"Policy: {claim.get('policy_number','N/A')}</span><br/>"
+                        f"<span style='font-size:12px;color:#555'>"
+                        f"Patient: {claim.get('patient','N/A')} &nbsp;|&nbsp; "
+                        f"Hospital: {claim.get('hospital','N/A')}</span><br/>"
+                        f"<span style='font-size:12px;color:#555'>"
+                        f"Diagnosis: {str(claim.get('diagnosis','N/A'))[:60]}</span>"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
+                with h_col2:
+                    st.markdown(
+                        f"<div style='padding:12px 0 4px;text-align:right'>"
+                        f"<div style='font-size:22px;font-weight:700;color:{prob_color}'>"
+                        f"{prob}%</div>"
+                        f"<div style='font-size:10px;color:#888'>Approval Probability</div>"
+                        f"<div style='font-size:11px;font-weight:600;color:{f_color};"
+                        f"margin-top:4px'>Fraud: {fraud}</div>"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
+                with h_col3:
+                    if st.button("🗑️", key=f"del_{i}_{claim['session_id']}",
+                                  help="Remove from tracker"):
+                        to_delete = i
+
+                # Status + notes row
+                e1, e2 = st.columns([2, 3])
+                with e1:
+                    new_status = st.selectbox(
+                        "Status",
+                        STATUS_OPTIONS,
+                        index=STATUS_OPTIONS.index(status) if status in STATUS_OPTIONS else 0,
+                        key=f"status_{i}_{claim['session_id']}",
+                        label_visibility="collapsed"
+                    )
+                    if new_status != status:
+                        st.session_state.claim_tracker[i]["status"] = new_status
+                        st.rerun()
+
+                    st.markdown(
+                        f"<span style='background:{s_color}20;color:{s_color};"
+                        f"font-size:11px;font-weight:600;padding:3px 10px;"
+                        f"border-radius:20px'>{new_status}</span>",
+                        unsafe_allow_html=True
+                    )
+
+                with e2:
+                    new_notes = st.text_input(
+                        "Notes",
+                        value=claim.get("notes", ""),
+                        placeholder="Add notes e.g. 'TPA requested discharge summary on 20 Mar'",
+                        key=f"notes_{i}_{claim['session_id']}",
+                        label_visibility="collapsed"
+                    )
+                    if new_notes != claim.get("notes", ""):
+                        st.session_state.claim_tracker[i]["notes"] = new_notes
+
+                st.markdown(
+                    f"<div style='font-size:11px;color:#aaa;padding-bottom:8px'>"
+                    f"Saved: {claim.get('saved_at','N/A')} &nbsp;|&nbsp; "
+                    f"Bill: Rs.{claim.get('total_bill','N/A')} &nbsp;|&nbsp; "
+                    f"Pre-Auth: {claim.get('preauth','N/A')} &nbsp;|&nbsp; "
+                    f"IRDAI: {claim.get('compliance','N/A')}"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
+                st.divider()
+
+        # Handle delete
+        if to_delete is not None:
+            st.session_state.claim_tracker.pop(to_delete)
+            st.rerun()
+
+        # ── Export / Import ────────────────────────────────────────────────────
+        st.markdown("#### 💾 Save Your Tracker Data")
+        st.caption("Download your tracker as JSON to preserve it between sessions. Upload to restore.")
+
+        ex1, ex2 = st.columns(2)
+        with ex1:
+            tracker_json = json.dumps(st.session_state.claim_tracker, indent=2)
+            st.download_button(
+                label="📥 Export Tracker (JSON)",
+                data=tracker_json,
+                file_name=f"TrustClaim_Tracker_{datetime.now().strftime('%Y%m%d')}.json",
+                mime="application/json",
+                use_container_width=True
+            )
+        with ex2:
+            uploaded = st.file_uploader(
+                "📤 Import Tracker (JSON)",
+                type=["json"],
+                key="tracker_import",
+                label_visibility="collapsed"
+            )
+            if uploaded:
+                try:
+                    imported = json.loads(uploaded.read())
+                    if isinstance(imported, list):
+                        existing_ids = {c["session_id"] for c in st.session_state.claim_tracker}
+                        added = 0
+                        for c in imported:
+                            if c.get("session_id") not in existing_ids:
+                                st.session_state.claim_tracker.append(c)
+                                added += 1
+                        st.success(f"✅ Imported {added} claim(s) successfully.")
+                        st.rerun()
+                    else:
+                        st.error("Invalid tracker file format.")
+                except Exception as e:
+                    st.error(f"Could not import: {e}")
+
+        # ── Clear all ──────────────────────────────────────────────────────────
+        if st.button("🗑️ Clear All Claims", type="secondary"):
+            st.session_state.claim_tracker = []
+            st.rerun()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB 5: KNOW YOUR RIGHTS
+# ═══════════════════════════════════════════════════════════════════════════════
+with tab6:
     st.markdown("### 📚 Know Your IRDAI Rights")
     st.info("Understanding these rights can save your claim. Most policyholders don't know them.")
 
@@ -1686,7 +1926,7 @@ with tab5:
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 4: HOW IT WORKS
 # ═══════════════════════════════════════════════════════════════════════════════
-with tab6:
+with tab7:
     st.markdown("### 🤖 How TrustClaim AI Works")
 
     st.markdown("#### The 5-Agent Intelligence Pipeline")
