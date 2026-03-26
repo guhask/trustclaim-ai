@@ -68,6 +68,9 @@ st.markdown("""
     background-color: #FAFAF8 !important;
   }
 
+  /* ── Red asterisk on mandatory fields ── */
+  .req-star { color: #E24B4A; font-weight: 700; }
+
   /* ── Hide Streamlit chrome ── */
   footer { visibility: hidden; }
   #MainMenu { visibility: hidden; }
@@ -283,6 +286,36 @@ st.markdown("""
     border-radius: 10px !important;
   }
 </style>
+""", unsafe_allow_html=True)
+
+# ── Red asterisk JS injection ─────────────────────────────────────────────────
+# Finds all Streamlit field labels ending with * and wraps it in a red span
+st.markdown("""
+<script>
+function markRequiredFields() {
+    const labels = document.querySelectorAll(
+        'label p, div[data-testid="stTextInput"] label, ' +
+        'div[data-testid="stTextArea"] label, ' +
+        'div[data-testid="stNumberInput"] label, ' +
+        'div[data-testid="stSelectbox"] label'
+    );
+    labels.forEach(label => {
+        if (label.textContent.trim().endsWith('*') && !label.dataset.marked) {
+            label.dataset.marked = '1';
+            const text = label.innerHTML;
+            label.innerHTML = text.replace(
+                /\s*\*\s*(<\/|$)/,
+                ' <span style="color:#E24B4A;font-weight:700">*</span>$1'
+            );
+        }
+    });
+}
+// Run after DOM is ready and after Streamlit rerenders
+setTimeout(markRequiredFields, 500);
+setTimeout(markRequiredFields, 1500);
+const obs = new MutationObserver(() => setTimeout(markRequiredFields, 200));
+obs.observe(document.body, { childList: true, subtree: true });
+</script>
 """, unsafe_allow_html=True)
 
 
@@ -591,10 +624,11 @@ def _get_demo_result(scenario: str) -> dict:
 
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "🔍 Analyze Claim",
     "📊 Results & Report",
     "🏢 Find Best Insurer",
+    "✉️ Grievance Letter",
     "📚 Know Your Rights",
     "ℹ️ How It Works"
 ])
@@ -1421,10 +1455,206 @@ with tab3:
                     f"</div>", unsafe_allow_html=True)
 
 
+
 # ═══════════════════════════════════════════════════════════════════════════════
-# TAB 4: KNOW YOUR RIGHTS
+# TAB 4: GRIEVANCE LETTER GENERATOR
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab4:
+    st.markdown("### ✉️ Grievance Letter Generator")
+    st.info(
+        "Claim rejected? Generate a legally-worded appeal letter citing exact IRDAI "
+        "regulations — ready to send to your insurer. Also generates an Insurance "
+        "Ombudsman complaint template if the insurer doesn't respond."
+    )
+
+    st.markdown(
+        "<div style='background:#E1F5EE;border-radius:10px;padding:12px 16px;"
+        "border-left:3px solid #0F6E56;margin-bottom:16px'>"
+        "<strong style='color:#0A4A38'>✅ Your rights under IRDAI:</strong>"
+        "<span style='color:#085041;font-size:13px'> Insurers MUST provide written "
+        "rejection with specific clause. If they don't respond to your grievance within "
+        "30 days, you can approach the Insurance Ombudsman for FREE.</span>"
+        "</div>",
+        unsafe_allow_html=True
+    )
+
+    # ── Input form ────────────────────────────────────────────────────────────
+    with st.form("grievance_form"):
+        st.markdown(
+            "<div style='font-size:12px;color:#E24B4A;margin-bottom:8px'>"
+            "Fields marked with <b>*</b> are mandatory</div>",
+            unsafe_allow_html=True
+        )
+        st.markdown("#### 📋 Your Details")
+        g1, g2 = st.columns(2)
+        with g1:
+            g_name    = st.text_input("Your Full Name (Policyholder) *", placeholder="Ramesh Kumar Sharma")
+            g_phone   = st.text_input("Phone Number", placeholder="9848012345")
+            g_policy  = st.text_input("Policy Number *", placeholder="P/211111/01/2026/001234")
+        with g2:
+            g_email   = st.text_input("Email Address", placeholder="ramesh@example.com")
+            g_address = st.text_area("Address", placeholder="42, Jubilee Hills, Hyderabad", height=68)
+            g_insurer = st.text_input("Insurance Company Name *", placeholder="Star Health and Allied Insurance")
+
+        st.markdown("#### 🏥 Claim Details")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            g_claim_no  = st.text_input("Claim Number", placeholder="CLM/2026/001234")
+            g_patient   = st.text_input("Patient Name", placeholder="Ramesh Kumar Sharma")
+        with c2:
+            g_hospital  = st.text_input("Hospital Name", placeholder="Apollo Hospitals")
+            g_diagnosis = st.text_input("Diagnosis", placeholder="Type 2 Diabetes with Nephropathy")
+        with c3:
+            g_amount    = st.text_input("Rejected Amount (Rs.) *", placeholder="103800")
+            g_rej_date  = st.text_input("Rejection Date", placeholder="15-March-2026")
+
+        g_adm_date  = st.text_input("Admission Date", placeholder="20-February-2026")
+        g_dis_date  = st.text_input("Discharge Date", placeholder="25-February-2026")
+
+        st.markdown("#### ❌ Rejection Details")
+        g_reason = st.text_area(
+            "Reason for rejection as stated in rejection letter *",
+            placeholder="e.g. Pre-existing disease waiting period not completed / "
+                        "Incomplete documentation / Treatment not covered under policy",
+            height=80
+        )
+
+        generate_btn = st.form_submit_button(
+            "✉️ Generate Grievance Letter + Ombudsman Complaint",
+            type="primary",
+            use_container_width=True
+        )
+
+    # ── Session state for persisting generated letters ───────────────────────
+    if "grievance_result"    not in st.session_state:
+        st.session_state.grievance_result    = None
+    if "grievance_policy_no" not in st.session_state:
+        st.session_state.grievance_policy_no = ""
+
+    # ── Generate letters ──────────────────────────────────────────────────────
+    if generate_btn:
+        if not all([g_name, g_insurer, g_policy, g_reason, g_amount]):
+            st.error("Please fill in at least: Your Name, Insurer, Policy Number, "
+                     "Rejection Amount, and Rejection Reason.")
+        else:
+            from agents.grievance_agent import GrievanceLetter
+            import tempfile
+
+            rejection_details = {
+                "policyholder_name":    g_name,
+                "policyholder_phone":   g_phone,
+                "policyholder_email":   g_email,
+                "policyholder_address": g_address,
+                "insurer_name":         g_insurer,
+                "policy_number":        g_policy,
+                "claim_number":         g_claim_no,
+                "rejection_date":       g_rej_date,
+                "rejection_reason":     g_reason,
+                "rejection_amount":     g_amount,
+                "patient_name":         g_patient or g_name,
+                "hospital_name":        g_hospital,
+                "diagnosis":            g_diagnosis,
+                "admission_date":       g_adm_date,
+                "discharge_date":       g_dis_date,
+            }
+
+            with st.spinner("Generating your grievance letter and ombudsman complaint..."):
+                gl     = GrievanceLetter()
+                tmp    = tempfile.mktemp(suffix=".pdf")
+                result = gl.generate(rejection_details, {}, tmp)
+
+            # Store in session state so downloads don't reset the page
+            # Read PDF bytes immediately while files exist
+            letter_bytes     = None
+            ombudsman_bytes  = None
+            if os.path.exists(result["letter_path"]):
+                with open(result["letter_path"], "rb") as f:
+                    letter_bytes = f.read()
+            if os.path.exists(result["ombudsman_path"]):
+                with open(result["ombudsman_path"], "rb") as f:
+                    ombudsman_bytes = f.read()
+
+            st.session_state.grievance_result = {
+                **result,
+                "letter_bytes":    letter_bytes,
+                "ombudsman_bytes": ombudsman_bytes,
+                "policy_no":       g_policy,
+            }
+
+    # ── Show results — persisted across rerenders ─────────────────────────────
+    if st.session_state.grievance_result:
+        result   = st.session_state.grievance_result
+        policy_n = result.get("policy_no", "claim").replace("/", "_")
+
+        st.success("✅ Both documents generated successfully! Download both below.")
+
+        dl1, dl2 = st.columns(2)
+
+        with dl1:
+            if result.get("letter_bytes"):
+                st.download_button(
+                    label="📥 Download Grievance Letter (PDF)",
+                    data=result["letter_bytes"],
+                    file_name=f"Grievance_Letter_{policy_n}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    type="primary",
+                    key="dl_grievance"
+                )
+                st.caption("Send to your insurer's grievance cell via registered post or email.")
+
+        with dl2:
+            if result.get("ombudsman_bytes"):
+                st.download_button(
+                    label="📥 Download Ombudsman Complaint (PDF)",
+                    data=result["ombudsman_bytes"],
+                    file_name=f"Ombudsman_Complaint_{policy_n}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="dl_ombudsman"
+                )
+                st.caption("Use if insurer doesn't respond within 30 days. File at ecoi.co.in — FREE.")
+
+        # Show key arguments
+        if result.get("key_arguments"):
+            with st.expander("⚖️ IRDAI Legal Arguments Used in Your Letter"):
+                for arg in result["key_arguments"][:5]:
+                    strength_color = "#E24B4A" if arg["strength"] == "HIGH" else "#EF9F27"
+                    st.markdown(
+                        f"<div style='padding:8px 12px;margin-bottom:6px;border-radius:6px;"
+                        f"border-left:3px solid {strength_color};background:#FAFAF8'>"
+                        f"<strong style='color:#1A1A1A'>{arg['argument']}</strong> "
+                        f"<span style='font-size:11px;color:#0F6E56'>[{arg['irdai_ref']}]</span><br/>"
+                        f"<span style='font-size:12px;color:#555'>{arg['law'][:120]}...</span>"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
+
+        st.divider()
+        st.markdown("#### 📋 What to Do Next")
+        steps = [
+            ("1", "Send grievance letter",  "Send to insurer's grievance email AND via registered post. Keep the postal receipt.", "#0F6E56"),
+            ("2", "Wait 30 days",           "Insurer must respond within 30 days. If no response, proceed to Ombudsman.", "#185FA5"),
+            ("3", "File with Ombudsman",    "Visit ecoi.co.in to find your regional Ombudsman. Completely free. No lawyer needed.", "#854F0B"),
+            ("4", "IRDAI Bima Bharosa",     "Escalate to IRDAI directly at bimabharosa.irdai.gov.in", "#555"),
+        ]
+        for num, title, detail, color in steps:
+            st.markdown(
+                f"<div style='display:flex;gap:12px;margin-bottom:8px;align-items:flex-start'>"
+                f"<div style='width:28px;height:28px;border-radius:50%;background:{color};"
+                f"color:white;display:flex;align-items:center;justify-content:center;"
+                f"font-weight:700;font-size:13px;flex-shrink:0'>{num}</div>"
+                f"<div><strong style='color:#1A1A1A'>{title}</strong><br/>"
+                f"<span style='font-size:12px;color:#555'>{detail}</span></div>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB 5: KNOW YOUR RIGHTS
+# ═══════════════════════════════════════════════════════════════════════════════
+with tab5:
     st.markdown("### 📚 Know Your IRDAI Rights")
     st.info("Understanding these rights can save your claim. Most policyholders don't know them.")
 
@@ -1456,7 +1686,7 @@ with tab4:
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 4: HOW IT WORKS
 # ═══════════════════════════════════════════════════════════════════════════════
-with tab5:
+with tab6:
     st.markdown("### 🤖 How TrustClaim AI Works")
 
     st.markdown("#### The 5-Agent Intelligence Pipeline")
