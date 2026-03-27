@@ -1267,6 +1267,7 @@ with tab3:
         with chip_cols[i]:
             if st.button(cond, key=f"chip_{cond}", use_container_width=True):
                 st.session_state.chip_condition = cond
+                st.rerun()
 
     col_in1, col_in2, col_in3 = st.columns([3, 1, 1])
     with col_in1:
@@ -1275,9 +1276,10 @@ with tab3:
             value=st.session_state.chip_condition,
             placeholder="e.g. diabetes, knee replacement, cardiac surgery, cancer...",
             label_visibility="visible",
-            key="condition_text_input"
         )
-        st.session_state.chip_condition = condition_input
+        # Sync back only if user typed something different
+        if condition_input != st.session_state.chip_condition:
+            st.session_state.chip_condition = condition_input
     with col_in2:
         age_input = st.number_input("Age", min_value=1, max_value=99,
                                      value=35, label_visibility="visible")
