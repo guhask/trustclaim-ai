@@ -404,7 +404,7 @@ st.markdown(
     "<h1>TrustClaim <span>AI</span></h1>"
     "<p>India's first pre-filing claim intelligence platform — know before you file, prevent rejections, protect your family.</p>"
     "<div class='tc-hero-pills'>"
-    "<span class='tc-pill'>5 AI Agents</span>"
+    "<span class='tc-pill'>7 AI Agents</span>"
     "<span class='tc-pill'>12 IRDAI Regulations</span>"
     "<span class='tc-pill'>10 Indian Insurers</span>"
     "<span class='tc-pill'>87% Prediction Accuracy</span>"
@@ -655,7 +655,7 @@ with tab1:
         "<div style='flex:1;padding:1rem 1.2rem;background:#F7F7F5;border-right:1px solid #E2E2DC'>"
         "<div style='font-size:22px;margin-bottom:4px'>⚖️</div>"
         "<div style='font-weight:600;font-size:13px;color:#0A4A38'>Step 2 — AI Analysis</div>"
-        "<div style='font-size:12px;color:#666;margin-top:2px'>5 agents check 12 IRDAI regulations in real-time</div>"
+        "<div style='font-size:12px;color:#666;margin-top:2px'>7 agents check 12 IRDAI regulations in real-time</div>"
         "</div>"
 
         "<div style='flex:1;padding:1rem 1.2rem;background:#F7F7F5;border-right:1px solid #E2E2DC'>"
@@ -1931,7 +1931,7 @@ with tab6:
 with tab7:
     st.markdown("### 🤖 How TrustClaim AI Works")
 
-    st.markdown("#### The 5-Agent Intelligence Pipeline")
+    st.markdown("#### The 7-Agent Intelligence Pipeline")
     agents_info = [
         ("🧠", "Orchestrator Agent",
          "The master controller. Sequences all agents, manages state, handles errors gracefully.",
